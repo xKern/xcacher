@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+test_case
+*.p
+*.dump
+persist
+build
+dist
+*.egg-info/
