@@ -5,8 +5,15 @@ import os
 
 
 class CacheItem:
-    def __init__(self, data, key, **kwargs):
-        self.path = kwargs.get('path', '')
+    """
+    Initializes a CacheItem
+
+    Keywords:
+    key -- the key that the data is asociated with
+    data -- the actual data object to be cached
+    path -- path where the cache item should serialize itself on the disk
+    """
+    def __init__(self, key, data, path):
         self.__data = data
         self.assigned_key = key
         self.added = time.time()
@@ -18,8 +25,16 @@ class CacheItem:
             f'{self.assigned_key}_{time.time()}'.encode()
         ).hexdigest()
 
+        self.path = f"{path}/{self.id_}"
+
     @property
     def data(self):
+        """ A getter for the item's data property
+
+        This is done so that we have control over reloading the cached data
+        back to memory from disk if it has been offloaded and so that each item
+        can be sorted later according to their last accessed timestamp.
+        """
         if not self.__data:
             self.reload()
             self.delete_from_disk()
@@ -29,10 +44,12 @@ class CacheItem:
         return self.__data
 
     def delete_from_disk(self):
-        os.remove(f"{self.path}/{self.id_}")
+        """ Deletes item's persistence file from disk """
+        os.remove(self.path)
 
     def offload(self):
-        with open(f'{self.path}/{self.id_}', 'wb') as f:
+        """ Offloads item data onto disk """
+        with open(self.path, 'wb') as f:
             try:
                 pickle.dump(self, f)
             except Exception as e:
@@ -44,7 +61,8 @@ class CacheItem:
         self.is_offloaded = True
 
     def reload(self):
-        with open(f'{self.path}/{self.id_}', 'rb') as f:
+        """ Reloads item's data back into memory from disk """
+        with open(self.path, 'rb') as f:
             x = pickle.load(f)
             self.__dict__ = x.__dict__
             self.is_offloaded = False
