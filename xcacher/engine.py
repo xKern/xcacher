@@ -4,45 +4,63 @@ from .item import CacheItem
 
 
 class Engine:
-    defaults = {
-        # How much to offload (mib)
-        "offload_size": 20,
-        # Total persistence in memory (mib)
-        "total_memory": 100,
-        "persistence_path": "/tmp"
-    }
+    mibibytes = 1024*1024
 
-    def __init__(self, **kwargs):
-        self.total_memory = kwargs.get('total_memory',
-                                       self.defaults['total_memory'])
-        self.persistence_path = kwargs.get('persistence_path',
-                                           self.defaults['persistence_path'])
+    def __init__(self, total_memory=None, offload_size=None, dump_path=None):
+        """
+            Initialize CacheEngine
 
-        self.offload_size = kwargs.get('offload_size',
-                                       self.defaults['offload_size'])
-        self.data = {}
+            Keyword arguments:
+            total_memory -- Memory the engine is allowed to use until it has to
+            offload
+            offload_size -- How much memory the engine should dump to drive
+            when it is offloading
+            dump_path -- Path to dump cache items to during offload
 
-        self.total_memory = self.total_memory*1024*1024
-        self.offload_size = self.offload_size*1024*1024
+        """
+        self.data = dict()
+
+        self.offload_size = offload_size if offload_size else 20
         self.is_offloading = False
 
+        self.total_memory = total_memory if total_memory else 100
+        self.offload_size = offload_size if offload_size else 20
+
+        self.dump_path = dump_path if dump_path else '/tmp/xcacher/'
+
+        self.total_memory = self.total_memory * self.mibibytes
+        self.offload_size = self.offload_size * self.mibibytes
+
     def __str__(self):
-        return (f"Total allowed memory: {self.total_memory/1024/1024} MiB"
-                f"\nTotal items: {len(self.data)}\n"
-                f"Offload size: {self.offload_size/1024/1024} MiB\n"
-                f"Current memory usage: "
-                f"{asizeof(self.data)/1024/1024} MiB\n"
-                f"Currently offloading: {self.is_offloading}")
+        return (f"Allocated memory: {self.total_memory} bytes\n"
+                f"Allocated offload size: {self.offload_size} bytes\n"
+                f"Cached items: {len(self.data)}\n"
+                f"Used memory: {asizeof(self)} bytes\n"
+                f"Persistence path: {self.dump_path}")
 
     def store(self, key, data):
-        # Check if the new data coming in would  break the memory threshold
-        # If it does, then offload
+        """Store an item in the cache
+
+        Keyword arguments:
+        key -- the key with which the data will be identified
+        data -- the data object to be cached
+        """
         self.data[key] = CacheItem(data, key, path=self.persistence_path)
+
+        # Check if the new item breaks the specified memory threshold
+        # If it does, begin the offloading process
         curr_size = asizeof(self)
         if(curr_size >= self.total_memory):
             self.offload()
 
     def get(self, key):
+        """Retrieve an item from the cache
+
+        Keyword arguments:
+        key -- the key with which the item will be identified
+
+        Raises ItemNotFoundError if the key could not be found
+        """
         try:
             item = self.data[key]
             return item
@@ -50,6 +68,12 @@ class Engine:
             raise ItemNotFoundError(f'{key} could not be found')
 
     def size(self, key=None):
+        """Return the size of an item from the cache or size of all items in
+        the cache
+
+        Keyword arguments:
+        key -- the key with which the item will be identified
+        """
         if not key:
             return asizeof(self.data)
 
@@ -59,6 +83,15 @@ class Engine:
             raise ItemNotFoundError(f'{key} could not be found')
 
     def offload(self):
+        """
+        Offloads the cached data to disk persistence sorted by last accessed
+        timestamp until offload_size is freed from total_memory.
+        Item identifiers are still kept in the cache engine to later
+        retrieve and load them back into memory when necessary.
+
+        The cache engine automatically checks if the allowed memory
+        threshold has been crossed and calls offload during store.
+        """
         self.is_offloading = True
 
         # Create key value pair with timestamp being key
