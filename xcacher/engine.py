@@ -45,7 +45,7 @@ class Engine:
         key -- the key with which the data will be identified
         data -- the data object to be cached
         """
-        self.data[key] = CacheItem(data, key, path=self.persistence_path)
+        self.data[key] = CacheItem(key=key, data=data, path=self.dump_path)
 
         # Check if the new item breaks the specified memory threshold
         # If it does, begin the offloading process
