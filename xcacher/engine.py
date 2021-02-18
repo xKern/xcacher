@@ -1,5 +1,5 @@
 from pympler.asizeof import asizeof
-from .errors import ItemNotFoundError
+from .errors import ItemNotFoundError, ItemExistsError
 from .item import CacheItem
 
 
@@ -45,6 +45,8 @@ class Engine:
         key -- the key with which the data will be identified
         data -- the data object to be cached
         """
+        if self.data.get(key, None):
+            raise ItemExistsError
         self.data[key] = CacheItem(key=key, data=data, path=self.dump_path)
 
         # Check if the new item breaks the specified memory threshold
